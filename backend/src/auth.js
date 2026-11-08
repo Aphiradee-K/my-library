@@ -13,7 +13,15 @@ async function hashPassword(password) {
 }
 
 async function verifyPassword(password, stored) {
-  const [scheme, salt, hash] = String(stored || '').split('$')
+  const value = String(stored || '')
+
+  // รองรับบัญชีเก่าที่เคยเก็บรหัสผ่านด้วย bcrypt
+  if (value.startsWith('$2a$') || value.startsWith('$2b$') || value.startsWith('$2y$')) {
+    const bcrypt = require('bcryptjs')
+    return bcrypt.compare(password, value)
+  }
+
+  const [scheme, salt, hash] = value.split('$')
   if (scheme !== 'scrypt' || !salt || !hash) return false
 
   const expected = Buffer.from(hash, 'hex')
