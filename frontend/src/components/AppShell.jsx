@@ -39,13 +39,21 @@ const PAGE_META = {
 
 export default function AppShell() {
   const { user, activity, logout } = useAuth()
-  const { books, addBook, updateBook, deleteBook, toggleStatus } = useBooks(
-    user.id,
-  )
+  const {
+    books,
+    loading,
+    error,
+    reload,
+    addBook,
+    updateBook,
+    deleteBook,
+    toggleStatus,
+  } = useBooks(user.id)
 
   const [page, setPage] = useState('dashboard')
   const [modal, setModal] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
   const [theme, setTheme] = useState(() => load('theme', 'light'))
   const toastTimer = useRef(null)
@@ -76,42 +84,83 @@ export default function AppShell() {
   const openEdit = (book) => setModal({ mode: 'edit', book })
   const closeModal = useCallback(() => setModal(null), [])
 
-  const handleSubmit = (data) => {
-    if (modal?.mode === 'edit') {
-      updateBook(modal.book.id, data)
-      notify('บันทึกการแก้ไขแล้ว')
-    } else {
-      addBook(data)
-      notify(
-        data.status === 'wishlist'
-          ? 'เพิ่มเข้าสู่รายการที่อยากได้แล้ว'
-          : 'เพิ่มหนังสือเข้าชั้นแล้ว',
-      )
-      goTo(data.status === 'wishlist' ? 'wishlist' : 'library')
+  const handleSubmit = async (data) => {
+    if (saving) return
+
+    setSaving(true)
+    try {
+      if (modal?.mode === 'edit') {
+        await updateBook(modal.book.id, data)
+        notify('บันทึกการแก้ไขแล้ว')
+      } else {
+        await addBook(data)
+        notify(
+          data.status === 'wishlist'
+            ? 'เพิ่มเข้าสู่รายการที่อยากได้แล้ว'
+            : 'เพิ่มหนังสือเข้าชั้นแล้ว',
+        )
+        goTo(data.status === 'wishlist' ? 'wishlist' : 'library')
+      }
+      setModal(null)
+    } catch (err) {
+      notify(err.message || 'บันทึกไม่สำเร็จ กรุณาลองใหม่', 'error')
+    } finally {
+      setSaving(false)
     }
-    setModal(null)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!pendingDelete) return
-    deleteBook(pendingDelete.id)
-    setPendingDelete(null)
-    notify('ลบหนังสือออกจากชั้นแล้ว')
+
+    try {
+      await deleteBook(pendingDelete.id)
+      notify('ลบหนังสือออกจากชั้นแล้ว')
+    } catch (err) {
+      notify(err.message || 'ลบไม่สำเร็จ กรุณาลองใหม่', 'error')
+    } finally {
+      setPendingDelete(null)
+    }
   }
 
-  const handleToggle = (book) => {
-    toggleStatus(book.id)
-    notify(
-      book.status === 'owned'
-        ? 'ย้ายไปรายการที่อยากได้แล้ว'
-        : 'ย้ายเข้าชั้นหนังสือแล้ว',
-    )
+  const handleToggle = async (book) => {
+    try {
+      await toggleStatus(book)
+      notify(
+        book.status === 'owned'
+          ? 'ย้ายไปรายการที่อยากได้แล้ว'
+          : 'ย้ายเข้าชั้นหนังสือแล้ว',
+      )
+    } catch (err) {
+      notify(err.message || 'ย้ายหนังสือไม่สำเร็จ', 'error')
+    }
   }
 
   const meta = PAGE_META[page]
 
   let content
-  if (page === 'library') {
+  if (page === 'activity') {
+    content = <Activity user={user} activity={activity} />
+  } else if (loading) {
+    content = (
+      <div className="page-state">
+        <span className="spinner" aria-hidden="true" />
+        <p>กำลังโหลดชั้นหนังสือ...</p>
+      </div>
+    )
+  } else if (error) {
+    content = (
+      <div className="page-state">
+        <div className="empty-icon">
+          <Icon name="x" size={26} />
+        </div>
+        <h3>โหลดข้อมูลไม่สำเร็จ</h3>
+        <p>{error}</p>
+        <button type="button" className="btn btn-primary" onClick={reload}>
+          <Icon name="history" size={16} /> ลองอีกครั้ง
+        </button>
+      </div>
+    )
+  } else if (page === 'library') {
     content = (
       <BookCollection
         books={owned}
@@ -140,8 +189,6 @@ export default function AppShell() {
         searchPlaceholder="ค้นหาในรายการที่อยากได้..."
       />
     )
-  } else if (page === 'activity') {
-    content = <Activity user={user} activity={activity} />
   } else {
     content = (
       <Dashboard
@@ -284,6 +331,7 @@ export default function AppShell() {
           defaultStatus={modal.status}
           onClose={closeModal}
           onSubmit={handleSubmit}
+          busy={saving}
         />
       ) : null}
 

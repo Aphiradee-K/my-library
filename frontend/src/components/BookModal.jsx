@@ -48,6 +48,7 @@ export default function BookModal({
   defaultStatus,
   onClose,
   onSubmit,
+  busy = false,
 }) {
   const [form, setForm] = useState(() => buildForm(mode, initial, defaultStatus))
   const [error, setError] = useState('')
@@ -243,9 +244,13 @@ export default function BookModal({
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               ยกเลิก
             </button>
-            <button type="submit" className="btn btn-primary">
-              <Icon name="check" size={16} />
-              {mode === 'edit' ? 'บันทึกการแก้ไข' : 'เพิ่มหนังสือ'}
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              <Icon name={busy ? 'clock' : 'check'} size={16} />
+              {busy
+                ? 'กำลังบันทึก...'
+                : mode === 'edit'
+                  ? 'บันทึกการแก้ไข'
+                  : 'เพิ่มหนังสือ'}
             </button>
           </div>
         </form>

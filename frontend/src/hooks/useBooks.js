@@ -1,55 +1,85 @@
-import { useEffect, useState } from 'react'
-import { load, save, uid } from '../lib/storage'
-
-function normalise(book) {
-  return {
-    ...book,
-    id: book.id || uid(),
-    addedAt: book.addedAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }
-}
+import { useCallback, useEffect, useState } from 'react'
+import { api } from '../lib/api'
 
 export function useBooks(userId) {
-  const [books, setBooks] = useState(() => load(`books.${userId}`, []))
+  const [books, setBooks] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const reload = useCallback(async () => {
+    setLoading(true)
+    setError('')
+
+    try {
+      const data = await api.listBooks()
+      setBooks(data.books)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    save(`books.${userId}`, books)
-  }, [books, userId])
+    if (!userId) return undefined
 
-  const addBook = (data) => {
-    const book = normalise({ ...data, id: uid(), addedAt: new Date().toISOString() })
-    setBooks((current) => [book, ...current])
-    return book
-  }
+    let cancelled = false
 
-  const updateBook = (id, patch) => {
+    api
+      .listBooks()
+      .then((data) => {
+        if (cancelled) return
+        setBooks(data.books)
+        setError('')
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  const addBook = useCallback(async (payload) => {
+    const data = await api.createBook(payload)
+    setBooks((current) => [data.book, ...current])
+    return data.book
+  }, [])
+
+  const updateBook = useCallback(async (id, patch) => {
+    const data = await api.updateBook(id, patch)
     setBooks((current) =>
-      current.map((book) =>
-        book.id === id
-          ? { ...book, ...patch, updatedAt: new Date().toISOString() }
-          : book,
-      ),
+      current.map((book) => (book.id === id ? data.book : book)),
     )
-  }
+    return data.book
+  }, [])
 
-  const deleteBook = (id) => {
+  const deleteBook = useCallback(async (id) => {
+    await api.deleteBook(id)
     setBooks((current) => current.filter((book) => book.id !== id))
-  }
+  }, [])
 
-  const toggleStatus = (id) => {
+  const toggleStatus = useCallback(async (book) => {
+    const status = book.status === 'owned' ? 'wishlist' : 'owned'
+    const data = await api.updateBook(book.id, { status })
     setBooks((current) =>
-      current.map((book) =>
-        book.id === id
-          ? {
-              ...book,
-              status: book.status === 'owned' ? 'wishlist' : 'owned',
-              updatedAt: new Date().toISOString(),
-            }
-          : book,
-      ),
+      current.map((item) => (item.id === book.id ? data.book : item)),
     )
-  }
+    return data.book
+  }, [])
 
-  return { books, addBook, updateBook, deleteBook, toggleStatus }
+  return {
+    books,
+    loading,
+    error,
+    reload,
+    addBook,
+    updateBook,
+    deleteBook,
+    toggleStatus,
+  }
 }

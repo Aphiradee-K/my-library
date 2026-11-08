@@ -64,7 +64,8 @@ export default function AuthPage() {
     setError('')
     setBusy(true)
     try {
-      await loginDemo()
+      const result = await loginDemo()
+      if (!result.ok) setError(result.error)
     } catch {
       setError('เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง')
     } finally {
@@ -134,7 +135,7 @@ export default function AuthPage() {
             <p>
               {mode === 'login'
                 ? 'ล็อกอินเพื่อบันทึกการเข้าใช้งานและจัดการหนังสือของคุณ'
-                : 'สมัครฟรี ใช้งานได้ทันที ข้อมูลเก็บไว้ในเครื่องนี้'}
+                : 'สมัครฟรี ใช้งานได้ทันที ข้อมูลถูกเก็บในฐานข้อมูล PostgreSQL'}
             </p>
           </div>
 
@@ -265,7 +266,7 @@ export default function AuthPage() {
           <p className="auth-note">
             บัญชีตัวอย่าง: <code>demo</code> / <code>demo1234</code>
             <br />
-            ข้อมูลทั้งหมดถูกเก็บใน localStorage ของเบราว์เซอร์นี้
+            ข้อมูลบัญชีและหนังสือถูกเก็บไว้ในฐานข้อมูล PostgreSQL
           </p>
         </div>
       </section>
